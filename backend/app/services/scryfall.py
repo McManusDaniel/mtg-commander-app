@@ -45,7 +45,7 @@ class ScryfallService:
                 
                 card_metadata = {
                     "name": data.get("name"),
-                    "oracle_id": data.get("oracle_id"),
+                    "id": data.get("id"),
                     "image_url": {
                         "normal": data.get("image_uris", {}).get("normal"),
                         "border_crop": data.get("image_uris", {}).get("border_crop"),
@@ -65,12 +65,12 @@ class ScryfallService:
             return card_metadata
 
     ## Get card rulings for card ##
-    async def fetch_rulings(self, oracle_id:str) -> list:
+    async def fetch_rulings(self, card_id:str) -> list:
         """
-        Get rulings data for a given Oracle ID.
+        Get rulings data for a given card ID.
 
         Args:
-            oracle_id (str): Oracle UUID.
+            id (str): Scryfall unique card ID.
 
         Raises:
             CardFetchError: Raises if Scryfall doesn't have a matching card in their database.
@@ -78,15 +78,15 @@ class ScryfallService:
         Returns:
             list: A list of card-specific rulings and their dates.
         """
-        if oracle_id in self._rulings_cache:
-            return self._rulings_cache[oracle_id]
+        if card_id in self._rulings_cache:
+            return self._rulings_cache[card_id]
     
         else:
             async with self.rate_limit_lock:
                 await asyncio.sleep(self.rate_limit_ms / 1000)
-                response = await self.client.get(f"https://api.scryfall.com/cards/{oracle_id}/rulings")
+                response = await self.client.get(f"https://api.scryfall.com/cards/{card_id}/rulings")
                 if response.status_code != 200:
-                    raise CardFetchError(f"Card ID '{oracle_id}' not found in Scryfall database.")
+                    raise CardFetchError(f"Card ID '{card_id}' not found in Scryfall database.")
                 data = response.json().get("data", [])
                 
                 clean_rulings = []
@@ -95,14 +95,14 @@ class ScryfallService:
                     rule = f"[{ruling.get('published_at')}] {ruling.get('comment')}"
                     clean_rulings.append(rule)
                 
-            self._rulings_cache[oracle_id] = clean_rulings
+            self._rulings_cache[card_id] = clean_rulings
                 
             return clean_rulings
     
     ## Combined Single Card Pull ##
     async def fetch_full_card(self, card:str) -> dict:
         card_data = await self.fetch_card_data(card)
-        card_rulings = await self.fetch_rulings(card_data["oracle_id"])
+        card_rulings = await self.fetch_rulings(card_data["id"])
         card_data["rulings"] = card_rulings
         
         return card_data
@@ -132,4 +132,3 @@ class ScryfallService:
             data = await asyncio.gather(*tasks)
             
         return data
-        
